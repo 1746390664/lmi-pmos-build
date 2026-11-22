@@ -66,8 +66,13 @@ jobs:
 
       - name: 拉取含 lmi 设备包的社区 pmaports
         run: |
-          set -eux
+          set -euxo pipefail
           git clone --depth=1 -b "$APORTS_BRANCH" "$APORTS_REPO" "$APORTS_DIR"
+          # pmbootstrap 要在 pmaports 里找到一个「官方上游」远程，否则直接报
+          # "could not find remote name for any URL"，fork 的 origin 它认不出来
+          git -C "$APORTS_DIR" remote remove upstream 2>/dev/null || true
+          git -C "$APORTS_DIR" remote add upstream https://gitlab.postmarketos.org/postMarketOS/pmaports.git
+          git -C "$APORTS_DIR" remote -v
           git -C "$APORTS_DIR" log -1 --format='commit %H %ad %s' --date=iso
           test -d "$APORTS_DIR/device/testing/$DEVICE_PKG"
 
