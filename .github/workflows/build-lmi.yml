@@ -192,7 +192,9 @@ jobs:
         run: |
           set -o pipefail
           if ! pmbootstrap --details-to-stdout -y build --lax firmware-xiaomi-lmi 2>&1 | tee /tmp/firmware.log; then
-            echo "::error title=firmware build failed::$(grep -inE 'error|fatal|cannot|no such' /tmp/firmware.log | tail -8 | tr -d '%' | tr '\n' '|' | tail -c 3000)"
+            echo "::error title=firmware build failed::$(tail -40 /tmp/firmware.log | tr -d '%' | tr '\n' '|' | tail -c 3500)"
+            echo "--- firmware.log tail ---"
+            tail -40 /tmp/firmware.log || true
             exit 1
           fi
 
