@@ -51,6 +51,19 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      # runner 每次都是全新机器，缓存已编好的包 + ccache + 源码包，
+      # 否则每轮迭代都要从零重编 45 分钟的内核
+      - name: 恢复构建缓存
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /mnt/pmb/work/packages
+            /mnt/pmb/work/cache_ccache_aarch64
+            /mnt/pmb/work/cache_distfiles
+          key: pmb-v1-${{ github.run_id }}
+          restore-keys: |
+            pmb-v1-
+
       - name: 安装宿主依赖
         run: |
           set -eux
@@ -212,3 +225,18 @@ jobs:
             /mnt/pmb/work/log.txt
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: 准备缓存目录
+        if: always()
+        run: mkdir -p /mnt/pmb/work/packages /mnt/pmb/work/cache_ccache_aarch64 /mnt/pmb/work/cache_distfiles
+
+      # 即使本轮失败也保存，下一轮就能跳过内核编译
+      - name: 保存构建缓存
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /mnt/pmb/work/packages
+            /mnt/pmb/work/cache_ccache_aarch64
+            /mnt/pmb/work/cache_distfiles
+          key: pmb-v1-${{ github.run_id }}
