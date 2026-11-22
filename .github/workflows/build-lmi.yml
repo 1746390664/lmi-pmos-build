@@ -145,9 +145,9 @@ jobs:
         run: |
           set -o pipefail
           if ! pmbootstrap --details-to-stdout -y build --lax "$KERNEL_PKG" 2>&1 | tee /tmp/kernel.log; then
-            echo "::error title=kernel build failed::$(tail -c 6000 /tmp/kernel.log | tr -d '%' | tr '\n' '|')"
-            echo "--- pmbootstrap log.txt (last 60) ---"
-            tail -60 /mnt/pmb/work/log.txt 2>/dev/null || true
+            echo "::error title=kernel build failed::$(grep -inE 'error|fatal|cannot find|no such file|undefined reference|make.*\*\*\*' /tmp/kernel.log | tail -10 | tr -d '%' | tr '\n' '|' | tail -c 3500)"
+            echo "--- pmbootstrap log.txt (last 80) ---"
+            tail -80 /mnt/pmb/work/log.txt 2>/dev/null || true
             exit 1
           fi
 
@@ -187,3 +187,14 @@ jobs:
           retention-days: 30
           compression-level: 0
           if-no-files-found: error
+
+      - name: 失败时上传构建日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            /tmp/*.log
+            /mnt/pmb/work/log.txt
+          retention-days: 7
+          if-no-files-found: ignore
