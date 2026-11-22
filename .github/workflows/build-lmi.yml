@@ -190,11 +190,21 @@ jobs:
       # 自动把它带出来编（子包 depends 未递归），导致 apk 报 no such package
       - name: 编译设备固件包
         run: |
-          set -o pipefail
-          if ! pmbootstrap --details-to-stdout -y build --lax firmware-xiaomi-lmi 2>&1 | tee /tmp/firmware.log; then
+          set -euxo pipefail
+          # 这个包只是拷文件、不编译；cross-native 下 fakeroot 会报
+          # "libfakeroot internal error: payload not recognized" 并导致写 apk 权限不足，
+          # 去掉 pmb:cross-native 让它走 aarch64 chroot（qemu）
+          FW="$APORTS_DIR/device/testing/firmware-xiaomi-lmi/APKBUILD"
+          sed -i 's/ pmb:cross-native//' "$FW"
+          grep -n '^options=' "$FW"
+          mkdir -p /mnt/pmb/work/packages/edge/aarch64
+          sudo chown -R 12345:12345 /mnt/pmb/work/packages
+          set +e
+          pmbootstrap --details-to-stdout -y build --lax firmware-xiaomi-lmi 2>&1 | tee /tmp/firmware.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" -ne 0 ]; then
             echo "::error title=firmware build failed::$(tail -40 /tmp/firmware.log | tr -d '%' | tr '\n' '|' | tail -c 3500)"
-            echo "--- firmware.log tail ---"
-            tail -40 /tmp/firmware.log || true
             exit 1
           fi
 
