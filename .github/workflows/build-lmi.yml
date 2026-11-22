@@ -140,18 +140,21 @@ jobs:
           printf '%s\n' "$OUT" | tail -6
 
       # 失败时把日志尾部塞进注解，方便在 API 里直接看到原因（无需管理员权限看日志）
+      # --details-to-stdout：把 abuild/编译器的真实输出也打到 step 日志里
       - name: 编译内核（交叉编译，30–60 分钟）
         run: |
           set -o pipefail
-          if ! pmbootstrap -y build --lax "$KERNEL_PKG" 2>&1 | tee /tmp/kernel.log; then
+          if ! pmbootstrap --details-to-stdout -y build --lax "$KERNEL_PKG" 2>&1 | tee /tmp/kernel.log; then
             echo "::error title=kernel build failed::$(tail -c 6000 /tmp/kernel.log | tr -d '%' | tr '\n' '|')"
+            echo "--- pmbootstrap log.txt (last 60) ---"
+            tail -60 /mnt/pmb/work/log.txt 2>/dev/null || true
             exit 1
           fi
 
       - name: 编译设备包
         run: |
           set -o pipefail
-          if ! pmbootstrap -y build --lax "$DEVICE_PKG" 2>&1 | tee /tmp/device.log; then
+          if ! pmbootstrap --details-to-stdout -y build --lax "$DEVICE_PKG" 2>&1 | tee /tmp/device.log; then
             echo "::error title=device build failed::$(tail -c 6000 /tmp/device.log | tr -d '%' | tr '\n' '|')"
             exit 1
           fi
@@ -159,7 +162,7 @@ jobs:
       - name: 生成 rootfs
         run: |
           set -o pipefail
-          if ! pmbootstrap -y install --password "$PMOS_PASSWORD" 2>&1 | tee /tmp/install.log; then
+          if ! pmbootstrap --details-to-stdout -y install --password "$PMOS_PASSWORD" 2>&1 | tee /tmp/install.log; then
             echo "::error title=install failed::$(tail -c 6000 /tmp/install.log | tr -d '%' | tr '\n' '|')"
             exit 1
           fi
