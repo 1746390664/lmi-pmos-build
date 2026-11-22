@@ -107,6 +107,9 @@ jobs:
             echo "timezone = Asia/Shanghai"
             echo "jobs = $(nproc)"
             echo "work = $WORK_DIR"
+            # 旧 fork 的 _pmb_recommends 里混着新版 Alpine 已删除的包（如 gvfs-afp），
+            # 所以装包时跳过 recommends，这里显式补上字体
+            echo "extra_packages = font-droid,font-droid-nonlatin"
           } > "$HOME/.config/pmbootstrap_v3.cfg"
           echo "----- pmbootstrap_v3.cfg -----"
           cat "$HOME/.config/pmbootstrap_v3.cfg"
@@ -173,7 +176,7 @@ jobs:
       - name: 生成 rootfs
         run: |
           set -o pipefail
-          if ! pmbootstrap --details-to-stdout -y install --password "$PMOS_PASSWORD" 2>&1 | tee /tmp/install.log; then
+          if ! pmbootstrap --details-to-stdout -y install --no-recommends --password "$PMOS_PASSWORD" 2>&1 | tee /tmp/install.log; then
             echo "::error title=install failed::$(tail -c 6000 /tmp/install.log | tr -d '%' | tr '\n' '|')"
             exit 1
           fi
