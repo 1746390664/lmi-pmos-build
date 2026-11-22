@@ -60,6 +60,7 @@ jobs:
             /mnt/pmb/work/packages
             /mnt/pmb/work/cache_ccache_aarch64
             /mnt/pmb/work/cache_distfiles
+            /mnt/pmb/work/config_abuild
           key: pmb-v1-${{ github.run_id }}
           restore-keys: |
             pmb-v1-
@@ -131,14 +132,6 @@ jobs:
           pmbootstrap config aports
           pmbootstrap config ui
           pmbootstrap status || true
-
-      # 缓存的 APKINDEX 是上一轮 runner 的临时密钥签的，本轮换了密钥就验不过，
-      # abuild 更新索引时会报 UNTRUSTED signature。删掉用当前密钥重建。
-      - name: 重建本地仓库索引
-        run: |
-          set -euxo pipefail
-          find /mnt/pmb/work/packages -name 'APKINDEX.tar.gz*' -delete || true
-          pmbootstrap index || echo "::warning::index 未执行（冷缓存时正常，后续编译会重建）"
 
       # 1) APKBUILD 里写的是 linux-$_tag.tar.gz（_tag=lmi），不能直接 grep 最终文件名
       # 2) v6.19 分支会动，源码包内容变了 sha512 就对不上，所以无条件重算校验和
@@ -258,7 +251,7 @@ jobs:
 
       - name: 准备缓存目录
         if: always()
-        run: mkdir -p /mnt/pmb/work/packages /mnt/pmb/work/cache_ccache_aarch64 /mnt/pmb/work/cache_distfiles
+        run: mkdir -p /mnt/pmb/work/packages /mnt/pmb/work/cache_ccache_aarch64 /mnt/pmb/work/cache_distfiles /mnt/pmb/work/config_abuild
 
       # 即使本轮失败也保存，下一轮就能跳过内核编译
       - name: 保存构建缓存
@@ -269,4 +262,5 @@ jobs:
             /mnt/pmb/work/packages
             /mnt/pmb/work/cache_ccache_aarch64
             /mnt/pmb/work/cache_distfiles
+            /mnt/pmb/work/config_abuild
           key: pmb-v1-${{ github.run_id }}
