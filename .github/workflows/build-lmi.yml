@@ -111,9 +111,9 @@ jobs:
           pmbootstrap config ui
           pmbootstrap status || true
 
-      # APKBUILD 里写的是 linux-$_tag.tar.gz（_tag=lmi），不是字面量文件名，
-      # 所以不能直接 grep 最终 URL；这里探测「展开后」的地址，再按原样替换。
-      - name: 修正内核源码包地址（仓库改名兜底）
+      # 1) APKBUILD 里写的是 linux-$_tag.tar.gz（_tag=lmi），不能直接 grep 最终文件名
+      # 2) v6.19 分支会动，源码包内容变了 sha512 就对不上，所以无条件重算校验和
+      - name: 修正内核源码包地址并重算校验和
         run: |
           set -euxo pipefail
           A="$APORTS_DIR/device/testing/$KERNEL_PKG/APKBUILD"
@@ -126,19 +126,20 @@ jobs:
               sed -i 's#https://github.com/yuweiyuan8/linux/archive/v6.19/linux-$_tag.tar.gz#https://github.com/yuweiyuan8/Linux-redmi-k30pro-6.19/archive/v6.19.tar.gz#' "$A"
             fi
             grep -n 'archive/' "$A" | head -3 || true
-            if ! OUT=$(pmbootstrap checksum "$KERNEL_PKG" 2>&1); then
-              echo "::error title=checksum failed::$(printf '%s' "$OUT" | tail -c 800 | tr '\n' '|')"
-              exit 1
-            fi
-            printf '%s\n' "$OUT" | tail -3
           fi
+          echo "重算校验和（源码包内容可能已变）"
+          if ! OUT=$(pmbootstrap checksum "$KERNEL_PKG" 2>&1); then
+            echo "::error title=checksum failed::$(printf '%s' "$OUT" | tail -c 3000 | tr '\n' '|')"
+            exit 1
+          fi
+          printf '%s\n' "$OUT" | tail -6
 
       # 失败时把日志尾部塞进注解，方便在 API 里直接看到原因（无需管理员权限看日志）
       - name: 编译内核（交叉编译，30–60 分钟）
         run: |
           set -o pipefail
           if ! pmbootstrap -y build --lax "$KERNEL_PKG" 2>&1 | tee /tmp/kernel.log; then
-            echo "::error title=kernel build failed::$(tail -c 1800 /tmp/kernel.log | tr -d '%' | tr '\n' '|')"
+            echo "::error title=kernel build failed::$(tail -c 6000 /tmp/kernel.log | tr -d '%' | tr '\n' '|')"
             exit 1
           fi
 
@@ -146,7 +147,7 @@ jobs:
         run: |
           set -o pipefail
           if ! pmbootstrap -y build --lax "$DEVICE_PKG" 2>&1 | tee /tmp/device.log; then
-            echo "::error title=device build failed::$(tail -c 1800 /tmp/device.log | tr -d '%' | tr '\n' '|')"
+            echo "::error title=device build failed::$(tail -c 6000 /tmp/device.log | tr -d '%' | tr '\n' '|')"
             exit 1
           fi
 
@@ -154,7 +155,7 @@ jobs:
         run: |
           set -o pipefail
           if ! pmbootstrap -y install --password "$PMOS_PASSWORD" 2>&1 | tee /tmp/install.log; then
-            echo "::error title=install failed::$(tail -c 1800 /tmp/install.log | tr -d '%' | tr '\n' '|')"
+            echo "::error title=install failed::$(tail -c 6000 /tmp/install.log | tr -d '%' | tr '\n' '|')"
             exit 1
           fi
 
