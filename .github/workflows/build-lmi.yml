@@ -137,7 +137,7 @@ jobs:
       - name: 编译内核（交叉编译，30–60 分钟）
         run: |
           set -o pipefail
-          if ! pmbootstrap -y build "$KERNEL_PKG" 2>&1 | tee /tmp/kernel.log; then
+          if ! pmbootstrap -y build --lax "$KERNEL_PKG" 2>&1 | tee /tmp/kernel.log; then
             echo "::error title=kernel build failed::$(tail -c 1800 /tmp/kernel.log | tr -d '%' | tr '\n' '|')"
             exit 1
           fi
@@ -145,7 +145,7 @@ jobs:
       - name: 编译设备包
         run: |
           set -o pipefail
-          if ! pmbootstrap -y build "$DEVICE_PKG" 2>&1 | tee /tmp/device.log; then
+          if ! pmbootstrap -y build --lax "$DEVICE_PKG" 2>&1 | tee /tmp/device.log; then
             echo "::error title=device build failed::$(tail -c 1800 /tmp/device.log | tr -d '%' | tr '\n' '|')"
             exit 1
           fi
