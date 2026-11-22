@@ -72,6 +72,13 @@ jobs:
           # "could not find remote name for any URL"，fork 的 origin 它认不出来
           git -C "$APORTS_DIR" remote remove upstream 2>/dev/null || true
           git -C "$APORTS_DIR" remote add upstream https://gitlab.postmarketos.org/postMarketOS/pmaports.git
+          # pmbootstrap 会用 `git show upstream/main:channels.cfg` 读通道表，
+          # 所以必须有 upstream/main 这个 ref
+          if ! git -C "$APORTS_DIR" fetch --depth=1 upstream main:refs/remotes/upstream/main; then
+            echo "::warning::拉取 upstream/main 失败，改用本地 HEAD 兜底"
+            git -C "$APORTS_DIR" update-ref refs/remotes/upstream/main "$(git -C "$APORTS_DIR" rev-parse HEAD)"
+          fi
+          git -C "$APORTS_DIR" show upstream/main:channels.cfg | head -20
           git -C "$APORTS_DIR" remote -v
           git -C "$APORTS_DIR" log -1 --format='commit %H %ad %s' --date=iso
           test -d "$APORTS_DIR/device/testing/$DEVICE_PKG"
