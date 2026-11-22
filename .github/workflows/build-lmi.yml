@@ -82,6 +82,11 @@ jobs:
           git -C "$APORTS_DIR" remote -v
           git -C "$APORTS_DIR" log -1 --format='commit %H %ad %s' --date=iso
           test -d "$APORTS_DIR/device/testing/$DEVICE_PKG"
+          # fork 里 temp/abuild 覆盖包（99993.12.0）从 craftyguy/abuild 的某个 commit 取源码，
+          # 该地址已失效，会卡在「abuild 自己编不出来」。我们不用 systemd，直接删掉，
+          # 让 pmbootstrap 用二进制仓库里的 abuild。
+          rm -rf "$APORTS_DIR/temp/abuild"
+          ls "$APORTS_DIR/temp" | head -10
 
       # pmbootstrap 要求「配置文件已存在 + work 目录已存在」才肯执行任何命令，
       # 所以不能先用 pmbootstrap config 去建它们（那会立刻以退出码 2 失败），直接写文件。
