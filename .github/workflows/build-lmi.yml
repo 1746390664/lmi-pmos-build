@@ -96,6 +96,15 @@ jobs:
           git -C "$APORTS_DIR" remote -v
           git -C "$APORTS_DIR" log -1 --format='commit %H %ad %s' --date=iso
           test -d "$APORTS_DIR/device/testing/$DEVICE_PKG"
+          # pmbootstrap 3.x 的 install 阶段会调用
+          # pmb.parse.deviceinfo_schema_default_boot_filesystem()，要求 pmaports 根目录存在
+          # deviceinfo_schema.toml，否则报 "pmaports checkout does not contain a
+          # 'deviceinfo_schema.toml'"，并死在 PREPARE INSTALL BLOCKDEVICE 之后。
+          # 老 fork（23.12 时代）没有该文件，这里补一个最小 0.1 schema（默认 ext2，
+          # 与上游一致）；deviceinfo 关键字校验在上游被注释掉了，只需 boot_filesystem。
+          install -m 644 "$GITHUB_WORKSPACE/ci/deviceinfo_schema.toml" "$APORTS_DIR/deviceinfo_schema.toml"
+          test -s "$APORTS_DIR/deviceinfo_schema.toml"
+          python3 -c 'import sys,tomllib; d=tomllib.load(open(sys.argv[1],"rb")); assert d["metadata"]["schema_version"]=="0.1"; print("deviceinfo_schema ok, boot fs =", d["variable"]["flash"]["boot_filesystem"]["default_value"])' "$APORTS_DIR/deviceinfo_schema.toml"
           # fork 里 temp/abuild 覆盖包（99993.12.0）从 craftyguy/abuild 的某个 commit 取源码，
           # 该地址已失效，会卡在「abuild 自己编不出来」。我们不用 systemd，直接删掉，
           # 让 pmbootstrap 用二进制仓库里的 abuild。

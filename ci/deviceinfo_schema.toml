@@ -1,0 +1,30 @@
+# CI shim: 给「老 pmaports fork + 新 pmbootstrap」补一个最小 deviceinfo schema。
+#
+# 背景：
+#   pmbootstrap 3.x 的 pmb.parse.deviceinfo_schema() 会在 pmaports 根目录找
+#   deviceinfo_schema.toml，找不到就直接抛
+#   "pmaports checkout does not contain a 'deviceinfo_schema.toml'. You may be on
+#    an unsupported branch"，于是 install 阶段在
+#   "*** (3/4) PREPARE INSTALL BLOCKDEVICE ***" 之后崩掉。
+#
+#   但整个 pmbootstrap 里这个 schema 只被一个地方真正用到：
+#   pmb.parse.deviceinfo_schema_default_boot_filesystem()，即 deviceinfo 没写
+#   deviceinfo_boot_filesystem 时用来取 /boot 分区的默认文件系统
+#   （install/partition.py、install/format.py、install/_install.py 各一处）。
+#   deviceinfo 关键字的 schema 校验在上游目前是被注释掉的（源码里的 FIXME），
+#   所以这个 0.1 schema 不需要列全所有 deviceinfo 变量。
+#
+#   取值与 pmaports 上游一致：[variable.flash.boot_filesystem] default_value = "ext2"，
+#   也就是老 pmOS（23.12 时代）boot 分区的 ext2。fork 分支 nikroks/alioth 基于那个
+#   年代，行为保持一致。
+
+[metadata]
+schema_version = "0.1"
+
+[metadata.categories]
+flash = "Flash"
+
+[variable.flash.boot_filesystem]
+description = "Sets the filesystem used for the /boot partition containing initramfs-extra"
+datatype = "string"
+default_value = "ext2"
