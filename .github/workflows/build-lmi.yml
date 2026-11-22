@@ -186,6 +186,16 @@ jobs:
             exit 1
           fi
 
+      # device-xiaomi-lmi-nonfree-firmware 依赖 firmware-xiaomi-lmi，但依赖树没有
+      # 自动把它带出来编（子包 depends 未递归），导致 apk 报 no such package
+      - name: 编译设备固件包
+        run: |
+          set -o pipefail
+          if ! pmbootstrap --details-to-stdout -y build --lax firmware-xiaomi-lmi 2>&1 | tee /tmp/firmware.log; then
+            echo "::error title=firmware build failed::$(grep -inE 'error|fatal|cannot|no such' /tmp/firmware.log | tail -8 | tr -d '%' | tr '\n' '|' | tail -c 3000)"
+            exit 1
+          fi
+
       - name: 生成 rootfs
         run: |
           set -o pipefail
