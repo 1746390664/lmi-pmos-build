@@ -1,0 +1,129 @@
+name: Build lmi postmarketOS image
+
+# 云端编译红米 K30 Pro / POCO F2 Pro (lmi) 的 postmarketOS 镜像
+# 产物：boot.img + xiaomi-lmi.img.xz（Actions 运行结束后在 Artifacts 下载）
+
+on:
+  workflow_dispatch:
+    inputs:
+      ui:
+        description: "桌面环境（phosh 轻量推荐 / plasma-mobile）"
+        required: false
+        default: "phosh"
+        type: choice
+        options:
+          - phosh
+          - plasma-mobile
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-lmi.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lmi-build
+  cancel-in-progress: false
+
+env:
+  PMOS_PASSWORD: "147147"
+  APORTS_REPO: "https://github.com/yuweiyuan8/pmaports.git"
+  APORTS_BRANCH: "nikroks/alioth"
+  KERNEL_PKG: "linux-postmarketos-qcom-sm8250-lmi"
+  DEVICE_PKG: "device-xiaomi-lmi"
+
+jobs:
+  build:
+    name: build lmi image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - name: 准备大盘（pmbootstrap 需要 40GB 以上）
+        run: |
+          set -eux
+          df -h /
+          sudo mkdir -p /mnt/pmb
+          sudo chown -R "$USER":"$USER" /mnt/pmb
+          df -h /mnt | tail -1
+
+      - uses: actions/checkout@v4
+
+      - name: 安装宿主依赖
+        run: |
+          set -eux
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq git kpartx openssl tar procps unzip xz-utils
+
+      - name: 安装 pmbootstrap
+        run: |
+          set -eux
+          git clone --depth=1 https://gitlab.postmarketos.org/postMarketOS/pmbootstrap.git "$RUNNER_TEMP/pmbootstrap"
+          sudo ln -sf "$RUNNER_TEMP/pmbootstrap/pmbootstrap.py" /usr/local/bin/pmbootstrap
+          pmbootstrap --version
+
+      - name: 拉取含 lmi 设备包的社区 pmaports
+        run: |
+          set -eux
+          git clone --depth=1 -b "$APORTS_BRANCH" "$APORTS_REPO" "$RUNNER_TEMP/pmaports-lmi"
+          git -C "$RUNNER_TEMP/pmaports-lmi" log -1 --format='commit %H %ad %s' --date=iso
+          test -d "$RUNNER_TEMP/pmaports-lmi/device/testing/$DEVICE_PKG"
+
+      - name: 写入 pmbootstrap 配置
+        run: |
+          set -eux
+          mkdir -p "$RUNNER_TEMP/work"
+          pmbootstrap config work    "$RUNNER_TEMP/work"
+          pmbootstrap config aports  "$RUNNER_TEMP/pmaports-lmi"
+          pmbootstrap config device  xiaomi-lmi
+          pmbootstrap config ui      "${{ inputs.ui || 'phosh' }}"
+          pmbootstrap config user    user
+          pmbootstrap config hostname lmi
+          pmbootstrap config timezone Asia/Shanghai
+          pmbootstrap config jobs    "$(nproc)"
+          pmbootstrap config device
+          pmbootstrap config aports
+
+      - name: 修正内核源码包地址（仓库改名兜底）
+        run: |
+          set -eux
+          A="$RUNNER_TEMP/pmaports-lmi/device/testing/$KERNEL_PKG/APKBUILD"
+          URL=$(grep -oE 'https://github\.com/[^"]*linux-lmi\.tar\.gz' "$A" | head -1)
+          echo "declared source: $URL"
+          CODE=$(curl -sIL --max-time 60 -o /dev/null -w '%{http_code}' "$URL" || echo 000)
+          echo "HTTP $CODE"
+          if [ "$CODE" != "200" ]; then
+            echo "回退到新仓库名"
+            sed -i 's#https://github.com/yuweiyuan8/linux/archive/v6.19/linux-lmi.tar.gz#https://github.com/yuweiyuan8/Linux-redmi-k30pro-6.19/archive/v6.19.tar.gz#' "$A"
+            pmbootstrap checksum "$KERNEL_PKG"
+          fi
+
+      - name: 编译内核（交叉编译，30–60 分钟）
+        run: pmbootstrap -y build "$KERNEL_PKG"
+
+      - name: 编译设备包
+        run: pmbootstrap -y build "$DEVICE_PKG"
+
+      - name: 生成 rootfs
+        run: pmbootstrap -y install --password "$PMOS_PASSWORD"
+
+      - name: 导出并压缩镜像
+        run: |
+          set -eux
+          pmbootstrap export
+          ls -lh /tmp/postmarketOS-export
+          mkdir -p out
+          cp /tmp/postmarketOS-export/boot.img out/boot.img
+          cp /tmp/postmarketOS-export/xiaomi-lmi.img out/xiaomi-lmi.img
+          xz -T0 -1 out/xiaomi-lmi.img
+          ( cd out && sha256sum boot.img xiaomi-lmi.img.xz > SHA256SUMS.txt && cat SHA256SUMS.txt )
+          du -h out/*
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaomi-lmi-pmos
+          path: out/*
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
