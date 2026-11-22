@@ -138,6 +138,17 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$OUT" | tail -6
+          # 仓库改名后，GitHub 归档的顶层目录名也变了（linux-v6.19 -> 新仓库名-v6.19），
+          # 而 APKBUILD 仍写死 builddir="$srcdir/linux-v6.19"，导致 abuild 找不到 Makefile。
+          TB=$(ls -1 /mnt/pmb/work/chroot_native/var/cache/distfiles/${KERNEL_PKG}-*.tar.gz 2>/dev/null | head -1 || true)
+          if [ -n "${TB:-}" ]; then
+            TOP=$(tar tzf "$TB" 2>/dev/null | head -1 | cut -d/ -f1 || true)
+            echo "tarball top dir: ${TOP:-unknown}"
+            sed -i "s#^builddir=.*#builddir=\"\\\$srcdir/$TOP\"#" "$A"
+            grep -n '^builddir=' "$A"
+          else
+            echo "::warning::没找到已下载的源码包，跳过 builddir 修正"
+          fi
 
       # 失败时把日志尾部塞进注解，方便在 API 里直接看到原因（无需管理员权限看日志）
       # --details-to-stdout：把 abuild/编译器的真实输出也打到 step 日志里
