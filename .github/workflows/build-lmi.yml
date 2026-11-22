@@ -32,6 +32,8 @@ env:
   APORTS_BRANCH: "nikroks/alioth"
   KERNEL_PKG: "linux-postmarketos-qcom-sm8250-lmi"
   DEVICE_PKG: "device-xiaomi-lmi"
+  WORK_DIR: "/mnt/pmb/work"
+  APORTS_DIR: "/mnt/pmb/pmaports-lmi"
 
 jobs:
   build:
@@ -65,29 +67,42 @@ jobs:
       - name: 拉取含 lmi 设备包的社区 pmaports
         run: |
           set -eux
-          git clone --depth=1 -b "$APORTS_BRANCH" "$APORTS_REPO" "$RUNNER_TEMP/pmaports-lmi"
-          git -C "$RUNNER_TEMP/pmaports-lmi" log -1 --format='commit %H %ad %s' --date=iso
-          test -d "$RUNNER_TEMP/pmaports-lmi/device/testing/$DEVICE_PKG"
+          git clone --depth=1 -b "$APORTS_BRANCH" "$APORTS_REPO" "$APORTS_DIR"
+          git -C "$APORTS_DIR" log -1 --format='commit %H %ad %s' --date=iso
+          test -d "$APORTS_DIR/device/testing/$DEVICE_PKG"
 
+      # pmbootstrap 要求「配置文件已存在 + work 目录已存在」才肯执行任何命令，
+      # 所以不能先用 pmbootstrap config 去建它们（那会立刻以退出码 2 失败），直接写文件。
       - name: 写入 pmbootstrap 配置
+        env:
+          UI_CHOICE: ${{ inputs.ui || 'phosh' }}
         run: |
           set -eux
-          mkdir -p "$RUNNER_TEMP/work"
-          pmbootstrap config work    "$RUNNER_TEMP/work"
-          pmbootstrap config aports  "$RUNNER_TEMP/pmaports-lmi"
-          pmbootstrap config device  xiaomi-lmi
-          pmbootstrap config ui      "${{ inputs.ui || 'phosh' }}"
-          pmbootstrap config user    user
-          pmbootstrap config hostname lmi
-          pmbootstrap config timezone Asia/Shanghai
-          pmbootstrap config jobs    "$(nproc)"
+          mkdir -p "$WORK_DIR" "$HOME/.config"
+          printf '8\n' > "$WORK_DIR/version"
+          {
+            echo "[pmbootstrap]"
+            echo "aports = $APORTS_DIR"
+            echo "device = xiaomi-lmi"
+            echo "ui = $UI_CHOICE"
+            echo "user = user"
+            echo "hostname = lmi"
+            echo "timezone = Asia/Shanghai"
+            echo "jobs = $(nproc)"
+            echo "work = $WORK_DIR"
+          } > "$HOME/.config/pmbootstrap_v3.cfg"
+          echo "----- pmbootstrap_v3.cfg -----"
+          cat "$HOME/.config/pmbootstrap_v3.cfg"
+          echo "----- verify -----"
           pmbootstrap config device
           pmbootstrap config aports
+          pmbootstrap config ui
+          pmbootstrap status || true
 
       - name: 修正内核源码包地址（仓库改名兜底）
         run: |
           set -eux
-          A="$RUNNER_TEMP/pmaports-lmi/device/testing/$KERNEL_PKG/APKBUILD"
+          A="$APORTS_DIR/device/testing/$KERNEL_PKG/APKBUILD"
           URL=$(grep -oE 'https://github\.com/[^"]*linux-lmi\.tar\.gz' "$A" | head -1)
           echo "declared source: $URL"
           CODE=$(curl -sIL --max-time 60 -o /dev/null -w '%{http_code}' "$URL" || echo 000)
