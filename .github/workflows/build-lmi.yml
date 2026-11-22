@@ -200,10 +200,20 @@ jobs:
           grep -n '^options=' "$FW"
           mkdir -p /mnt/pmb/work/packages/edge/aarch64
           sudo chown -R 12345:12345 /mnt/pmb/work/packages
+
           set +e
           pmbootstrap --details-to-stdout -y build --lax firmware-xiaomi-lmi 2>&1 | tee /tmp/firmware.log
           rc=${PIPESTATUS[0]}
+          # 缓存里的索引可能由上一轮的临时密钥签名，abuild 会报 UNTRUSTED signature。
+          # 此时删掉旧索引重试：abuild 会用当前密钥从所有 *.apk 重建（内核包不会丢）。
+          if [ "$rc" -ne 0 ] && grep -q 'UNTRUSTED signature' /tmp/firmware.log; then
+            echo "::warning::索引签名不可信，删除旧索引后重试"
+            find /mnt/pmb/work/packages -name 'APKINDEX.tar.gz*' -delete || true
+            pmbootstrap --details-to-stdout -y build --lax firmware-xiaomi-lmi 2>&1 | tee /tmp/firmware.log
+            rc=${PIPESTATUS[0]}
+          fi
           set -e
+
           if [ "$rc" -ne 0 ]; then
             echo "::error title=firmware build failed::$(tail -40 /tmp/firmware.log | tr -d '%' | tr '\n' '|' | tail -c 3500)"
             exit 1
